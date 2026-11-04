@@ -235,5 +235,17 @@ chargerVendeurs().then(function(){
 });
 })();
 </script>
+
+<!-- CONNEXION SUPABASE - VENDREPLUS AFRIQUE -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+  window.vpaSupabase = window.supabase.createClient(
+    "https://zgewqegwbjcrtonipmyp.supabase.co",
+    "sb_publishable_OV4H8ayykuvjN9eKoxVxVg_fZtnX-ny"
+  );
+
+  console.log("VendrePlus Afrique : Supabase initialisé !");
+</script>
 </body>
 </html>
