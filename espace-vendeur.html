@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espace vendeur - Vente Plus Afrique</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Arial,sans-serif;margin:0;background:#f4f4f4;color:#222}
+  header{background:#e65100;color:#fff;padding:14px;text-align:center;font-size:18px;font-weight:bold}
+  main{max-width:480px;margin:auto;padding:14px}
+  .card{background:#fff;border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:0 1px 4px #0002}
+  h2{margin:0 0 10px;font-size:17px}
+  input,select,textarea,button{width:100%;padding:11px;margin:5px 0;font-size:16px;border:1px solid #ccc;border-radius:8px}
+  button{background:#e65100;color:#fff;border:none;font-weight:bold}
+  button.sec{background:#fff;color:#e65100;border:1px solid #e65100}
+  button.danger{background:#c62828}
+  .row{display:flex;gap:8px}
+  .row button{width:50%}
+  .prod{border-top:1px solid #eee;padding:10px 0}
+  .prod b{display:block}
+  .off{opacity:.5}
+  #msg{padding:10px;border-radius:8px;margin-bottom:12px;display:none}
+  .ok{background:#e8f5e9;color:#1b5e20}
+  .err{background:#ffebee;color:#b71c1c}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>🛒 Espace vendeur</header>
+<main>
+  <div id="msg"></div>
+
+  <!-- Connexion -->
+  <section id="vue-auth" class="card hidden">
+    <h2>Connexion / Inscription</h2>
+    <input id="email" type="email" placeholder="Adresse e-mail" autocomplete="email">
+    <input id="mdp" type="password" placeholder="Mot de passe (6 caractères min.)" autocomplete="current-password">
+    <div class="row">
+      <button id="btn-connexion">Se connecter</button>
+      <button id="btn-inscription" class="sec">Créer un compte</button>
+    </div>
+  </section>
+
+  <!-- Création boutique -->
+  <section id="vue-boutique" class="card hidden">
+    <h2>Crée ta boutique</h2>
+    <input id="b-nom" placeholder="Nom de la boutique">
+    <input id="b-tel" type="tel" placeholder="Téléphone / WhatsApp (ex : 22606783480)">
+    <select id="b-quartier">
+      <option value="">Choisis ton quartier</option>
+      <option>Bonheur-ville</option>
+      <option>Bornham</option>
+      <option>Pissy</option>
+      <option>Autre</option>
+    </select>
+    <button id="btn-gps" class="sec">📍 Utiliser ma position</button>
+    <small id="gps-etat"></small>
+    <button id="btn-creer-boutique">Créer ma boutique</button>
+  </section>
+
+  <!-- Tableau de bord -->
+  <section id="vue-dash" class="hidden">
+    <div class="card">
+      <h2 id="d-nom"></h2>
+      <small id="d-verif"></small>
+    </div>
+
+    <div class="card">
+      <h2>Ajouter un produit</h2>
+      <input id="p-nom" placeholder="Nom du produit">
+      <input id="p-prix" type="number" inputmode="numeric" min="0" placeholder="Prix en FCFA">
+      <select id="p-cat"></select>
+      <textarea id="p-desc" rows="2" placeholder="Description (facultatif)"></textarea>
+      <button id="btn-ajouter">Ajouter le produit</button>
+    </div>
+
+    <div class="card">
+      <h2>Mes produits</h2>
+      <div id="liste"></div>
+    </div>
+
+    <button id="btn-deco" class="sec">Se déconnecter</button>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://zgewqegwbjcrtonipmyp.supabase.co";
+const SUPABASE_KEY = "sb_publishable_OV4H8ayykuvjN9eKoxVxVg_fZtnX-ny";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+let user = null, boutique = null, gps = {lat:null, lng:null};
+
+function msg(texte, type){
+  const m = $("msg");
+  m.textContent = texte;
+  m.className = type;
+  m.style.display = "block";
+  setTimeout(()=>{ m.style.display = "none"; }, 5000);
+}
+function vue(nom){
+  ["vue-auth","vue-boutique","vue-dash"].forEach(v => $(v).classList.add("hidden"));
+  $(nom).classList.remove("hidden");
+}
+
+/* ---------- Authentification ---------- */
+$("btn-inscription").onclick = async () => {
+  const { error } = await db.auth.signUp({ email: $("email").value.trim(), password: $("mdp").value });
+  if (error) return msg(error.message, "err");
+  msg("Compte créé. Si on te demande de confirmer, vérifie ta boîte e-mail (et les spams), puis connecte-toi.", "ok");
+};
+$("btn-connexion").onclick = async () => {
+  const { error } = await db.auth.signInWithPassword({ email: $("email").value.trim(), password: $("mdp").value });
+  if (error) return msg("Connexion impossible : " + error.message, "err");
+};
+$("btn-deco").onclick = async () => { await db.auth.signOut(); };
+
+db.auth.onAuthStateChange((_evt, session) => {
+  user = session ? session.user : null;
+  setTimeout(demarrer, 0);
+});
+
+async function demarrer(){
+  if (!user) { boutique = null; return vue("vue-auth"); }
+  const { data, error } = await db.from("vendeurs").select("*").eq("user_id", user.id).maybeSingle();
+  if (error) return msg("Erreur : " + error.message, "err");
+  boutique = data;
+  if (!boutique) return vue("vue-boutique");
+  await ouvrirDashboard();
+}
+
+/* ---------- Création de la boutique ---------- */
+$("btn-gps").onclick = () => {
+  if (!navigator.geolocation) return msg("GPS non disponible sur ce téléphone.", "err");
+  $("gps-etat").textContent = "Recherche de ta position…";
+  navigator.geolocation.getCurrentPosition(
+    p => { gps = {lat:p.coords.latitude, lng:p.coords.longitude}; $("gps-etat").textContent = "✅ Position enregistrée"; },
+    () => { $("gps-etat").textContent = "❌ Position refusée (tu peux continuer sans)"; }
+  );
+};
+$("btn-creer-boutique").onclick = async () => {
+  const nom = $("b-nom").value.trim();
+  if (!nom) return msg("Écris le nom de ta boutique.", "err");
+  const { error } = await db.from("vendeurs").insert({
+    user_id: user.id,
+    nom_boutique: nom,
+    telephone: $("b-tel").value.trim() || null,
+    quartier: $("b-quartier").value || null,
+    latitude: gps.lat,
+    longitude: gps.lng
+  });
+  if (error) return msg("Erreur : " + error.message, "err");
+  msg("Boutique créée 🎉", "ok");
+  demarrer();
+};
+
+/* ---------- Tableau de bord ---------- */
+async function ouvrirDashboard(){
+  $("d-nom").textContent = "🏪 " + boutique.nom_boutique;
+  $("d-verif").textContent = boutique.verifie ? "✅ Boutique vérifiée" : "Badge « vérifié » : demande-le par WhatsApp";
+  const { data: cats } = await db.from("categories").select("id,nom").order("nom");
+  const sel = $("p-cat");
+  sel.textContent = "";
+  const o0 = document.createElement("option");
+  o0.value = ""; o0.textContent = "Catégorie";
+  sel.appendChild(o0);
+  (cats || []).forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.id; o.textContent = c.nom;
+    sel.appendChild(o);
+  });
+  vue("vue-dash");
+  chargerProduits();
+}
+
+$("btn-ajouter").onclick = async () => {
+  const nom = $("p-nom").value.trim();
+  const prix = parseInt($("p-prix").value, 10);
+  if (!nom || isNaN(prix) || prix < 0) return msg("Nom et prix valides obligatoires.", "err");
+  const { error } = await db.from("produits").insert({
+    vendeur_id: boutique.id,
+    nom: nom,
+    prix: prix,
+    categorie_id: $("p-cat").value ? Number($("p-cat").value) : null,
+    description: $("p-desc").value.trim() || null
+  });
+  if (error) return msg("Erreur : " + error.message, "err");
+  $("p-nom").value = ""; $("p-prix").value = ""; $("p-desc").value = "";
+  msg("Produit ajouté ✅", "ok");
+  chargerProduits();
+};
+
+async function chargerProduits(){
+  const { data, error } = await db.from("produits").select("*").eq("vendeur_id", boutique.id).order("cree_le", {ascending:false});
+  const zone = $("liste");
+  zone.textContent = "";
+  if (error) return msg("Erreur : " + error.message, "err");
+  if (!data.length) { zone.textContent = "Aucun produit pour le moment."; return; }
+  data.forEach(p => {
+    const d = document.createElement("div");
+    d.className = "prod" + (p.actif ? "" : " off");
+    const t = document.createElement("b");
+    t.textContent = p.nom + " — " + p.prix.toLocaleString("fr-FR") + " FCFA";
+    d.appendChild(t);
+    const row = document.createElement("div");
+    row.className = "row";
+    const b1 = document.createElement("button");
+    b1.className = "sec";
+    b1.textContent = p.actif ? "Masquer" : "Afficher";
+    b1.onclick = async () => {
+      const { error } = await db.from("produits").update({actif: !p.actif}).eq("id", p.id);
+      if (error) msg(error.message, "err"); else chargerProduits();
+    };
+    const b2 = document.createElement("button");
+    b2.className = "danger";
+    b2.textContent = "Supprimer";
+    b2.onclick = async () => {
+      if (!confirm("Supprimer ce produit ?")) return;
+      const { error } = await db.from("produits").delete().eq("id", p.id);
+      if (error) msg("Impossible de supprimer (produit déjà commandé ?). Utilise « Masquer ».", "err");
+      else chargerProduits();
+    };
+    row.appendChild(b1); row.appendChild(b2);
+    d.appendChild(row);
+    zone.appendChild(d);
+  });
+}
+</script>
+</body>
+</html>
