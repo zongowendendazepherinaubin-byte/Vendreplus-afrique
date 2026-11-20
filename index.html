@@ -116,13 +116,15 @@ let VENDEURS = [];async function chargerVendeurs(){
       "sb_publishable_OV4H8ayykuvjN9eKoxVxVg_fZtnX-ny"
     );
     const {data,error} = await sb.from("vendeurs")
-      .select("id,nom_boutique,telephone,quartier,latitude,longitude,verifie");
+      .select("id,nom_boutique,telephone,quartier,latitude,longitude,verifie,produits(nom,categories(nom))");
     if(error) throw error;
     VENDEURS = (data || []).map(v=>({
-      id:v.id, nom:v.nom_boutique, cat:"Boutique",
+      id:v.id, nom:v.nom_boutique,
+      cat:v.produits?.find(p=>p.categories?.nom)?.categories?.nom || "Autre",
       zone:v.quartier || "Quartier non précisé",
       lat:Number(v.latitude), lng:Number(v.longitude),
-      tel:v.telephone, verifie:v.verifie, produits:""
+      tel:v.telephone, verifie:v.verifie,
+      produits:(v.produits || []).map(p=>p.nom).filter(Boolean).join(", ")
     })).filter(validSeller);
   }catch(e){
     console.error("Chargement des vendeurs impossible :",e);
