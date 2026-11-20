@@ -91,7 +91,7 @@ footer{text-align:center;padding:14px;color:var(--muted);font-size:11px}
 </main>
 <footer>VendrePlus Afrique · Les positions de démonstration sont fictives. Vérifie les informations avant publication.</footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
 <script>
 (function(){
 "use strict";
@@ -109,27 +109,25 @@ const ZONES = {
   "Tampouy": {lat:12.4150,lng:-1.5450,z:14}
 };
 
-// EXEMPLES FICTIFS : remplace-les par les commerçants qui ont donné leur accord.
-let VENDEURS = [
-  {id:1,nom:"Boutique Mode Awa",cat:"Mode",zone:"Pissy",lat:12.3305,lng:-1.5740,tel:"22670000001",verifie:true,produits:"Vêtements"},
-  {id:2,nom:"Ferme Kaboré",cat:"Élevage",zone:"Pissy",lat:12.3260,lng:-1.5790,tel:"22670000002",verifie:false,produits:"Volailles"},
-  {id:3,nom:"Alimentation Sawadogo",cat:"Alimentation",zone:"Bonheurville",lat:12.3610,lng:-1.4920,tel:"22670000003",verifie:true,produits:"Produits alimentaires"},
-  {id:4,nom:"Tissus Wend-Panga",cat:"Mode",zone:"Zogona",lat:12.3945,lng:-1.4880,tel:"22670000004",verifie:false,produits:"Pagnes et tissus"},
-  {id:5,nom:"Marché Frais Ouaga",cat:"Alimentation",zone:"Ouaga 2000",lat:12.2990,lng:-1.4860,tel:"22670000005",verifie:true,produits:"Fruits et légumes"},
-  {id:6,nom:"Élevage Ouédraogo",cat:"Élevage",zone:"Tampouy",lat:12.4140,lng:-1.5430,tel:"22670000006",verifie:false,produits:"Élevage"}
-];async function chargerVendeurs(){
+let VENDEURS = [];async function chargerVendeurs(){
   try{
-    const sb = window.supabase.createClient("TON_URL_SUPABASE","TA_CLE_ANON");
+    const sb = window.supabase.createClient(
+      "https://zgewqegwbjcrtonipmyp.supabase.co",
+      "sb_publishable_OV4H8ayykuvjN9eKoxVxVg_fZtnX-ny"
+    );
     const {data,error} = await sb.from("vendeurs")
-      .select("*").eq("actif",true).not("latitude","is",null);
-    if(error){console.error(error);return;}
-    if(data && data.length){
-      VENDEURS = data.map(v=>({
-        id:v.id, nom:v.nom, cat:v.categorie, zone:v.zone,
-        lat:v.latitude, lng:v.longitude, tel:v.whatsapp, verifie:v.verifie
-      }));
-    }
-  }catch(e){console.error(e);}
+      .select("id,nom_boutique,telephone,quartier,latitude,longitude,verifie");
+    if(error) throw error;
+    VENDEURS = (data || []).map(v=>({
+      id:v.id, nom:v.nom_boutique, cat:"Boutique",
+      zone:v.quartier || "Quartier non précisé",
+      lat:Number(v.latitude), lng:Number(v.longitude),
+      tel:v.telephone, verifie:v.verifie, produits:""
+    })).filter(validSeller);
+  }catch(e){
+    console.error("Chargement des vendeurs impossible :",e);
+    setStatus("Impossible de charger les boutiques autorisées. Vérifie ta connexion puis actualise la page.");
+  }
 }
 
 const $=id=>document.getElementById(id);
@@ -229,23 +227,9 @@ $("sellerForm").addEventListener("submit",e=>{
   setStatus("La demande est préparée. Vérifie le message dans WhatsApp et joins la photo manuellement si nécessaire.");
 });
 
-chargerVendeurs().then(function(){
-  fillFilters();
-  if(initMap())render(false);
-});
+
 })();
 </script>
 
-<!-- CONNEXION SUPABASE - VENDREPLUS AFRIQUE -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-<script>
-  window.vpaSupabase = window.supabase.createClient(
-    "https://zgewqegwbjcrtonipmyp.supabase.co",
-    "sb_publishable_OV4H8ayykuvjN9eKoxVxVg_fZtnX-ny"
-  );
-
-  console.log("VendrePlus Afrique : Supabase initialisé !");
-</script>
 </body>
 </html>
